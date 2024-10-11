@@ -1,0 +1,223 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="UTF-8" />
+    <title>Sign Up페이지 (Node, My SQL)</title>
+  </head>
+  <body>
+    <h1>POST 테스트</h1>
+    <br />
+    <form method="post" action="/users">
+      <table>
+        <tr>
+          <td><label>사용자명</label></td>
+          <td><input type="text" name="name" /></td>
+        </tr>
+        <tr>
+          <td><label>이메일</label></td>
+          <td><input type="text" name="email" /></td>
+        </tr>
+        <tr>
+          <td><label>나이</label></td>
+          <td><input type="number" name="age" /></td>
+        </tr>
+      </table>
+      <input type="submit" value="제출" />
+    </form>
+    <div id="userList">
+      <h2>등록된 사용자 목록</h2>
+      <div id="users"></div>
+    </div>
+  </body>
+  <script>
+    // 사용자 목록을 가져오는 함수
+    async function fetchUsers() {
+      try {
+        const response = await fetch("/users");
+        if (!response.ok) {
+          throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        const users = await response.json();
+        const userList = document.getElementById("users");
+
+        if (users.length === 0) {
+          userList.innerHTML = "<p>등록된 사용자가 없습니다.</p>";
+          return;
+        }
+
+        userList.innerHTML = users
+          .map(
+            (user) => `
+                    <div class="user-card" id="user-${user.id}">
+                        <div class="user-info">
+                            <p><strong>이름:</strong> ${user.name}</p>
+                            <p><strong>이메일:</strong> ${user.email}</p>
+                            <p><strong>나이:</strong> ${
+                              user.age || "미입력"
+                            }</p>
+                        </div>
+                        <div class="button-group">
+                            <button class="edit-button" onclick="showEditForm(${
+                              user.id
+                            })">수정</button>
+                            <button class="delete-button" onclick="deleteUser(${
+                              user.id
+                            })">삭제</button>
+                        </div>
+                        <div class="edit-form" id="edit-form-${
+                          user.id
+                        }" style="display: none;">
+                            <input type="text" id="edit-name-${
+                              user.id
+                            }" placeholder="이름" />
+                            <input type="email" id="edit-email-${
+                              user.id
+                            }" placeholder="이메일" />
+                            <input type="number" id="edit-age-${
+                              user.id
+                            }" placeholder="나이" />
+                            <div class="button-group">
+                                <button class="save-button" onclick="updateUser(${
+                                  user.id
+                                })">저장</button>
+                                <button class="cancel-button" onclick="hideEditForm(${
+                                  user.id
+                                })">취소</button>
+                            </div>
+                        </div>
+                    </div>
+                `
+          )
+          .join("");
+      } catch (error) {
+        console.error("사용자 목록을 가져오는 중 오류 발생:", error);
+        document.getElementById("users").innerHTML =
+          '<p style="color: red;">사용자 목록을 불러오는 중 오류가 발생했습니다.</p>';
+      }
+    }
+
+    // 페이지 로드 시 사용자 목록 가져오기
+    window.addEventListener("load", fetchUsers);
+
+    // 폼 제출 후 자동으로 목록 갱신
+    document.querySelector("form").addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const formData = new FormData(e.target);
+
+      try {
+        const response = await fetch("/users", {
+          method: "POST",
+          body: formData,
+        });
+
+        if (!response.ok) {
+          throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        const result = await response.json();
+        console.log("생성 성공:", result);
+        // 폼 초기화
+        e.target.reset();
+        // 사용자 목록 갱신
+        await fetchUsers();
+      } catch (error) {
+        console.error("사용자 등록 중 오류 발생:", error);
+        alert("사용자 등록 중 오류가 발생했습니다.");
+      }
+    });
+
+    // 수정 폼 표시
+    function showEditForm(userId) {
+      const userCard = document.querySelector(`#user-${userId}`);
+      const userInfo = userCard.querySelector(".user-info");
+      const editForm = document.querySelector(`#edit-form-${userId}`);
+
+      // 현재 값을 폼에 설정
+      const name = userInfo
+        .querySelector("p:nth-child(1)")
+        .textContent.split(": ")[1];
+      const email = userInfo
+        .querySelector("p:nth-child(2)")
+        .textContent.split(": ")[1];
+      const age = userInfo
+        .querySelector("p:nth-child(3)")
+        .textContent.split(": ")[1];
+
+      document.querySelector(`#edit-name-${userId}`).value = name;
+      document.querySelector(`#edit-email-${userId}`).value = email;
+      document.querySelector(`#edit-age-${userId}`).value =
+        age !== "미입력" ? age : "";
+
+      editForm.style.display = "block";
+    }
+
+    // 수정 폼 숨기기
+    function hideEditForm(userId) {
+      document.querySelector(`#edit-form-${userId}`).style.display = "none";
+    }
+
+    // 사용자 정보 업데이트 (PATCH)
+    async function updateUser(userId) {
+      const updates = {};
+      const name = document.querySelector(`#edit-name-${userId}`).value;
+      const email = document.querySelector(`#edit-email-${userId}`).value;
+      const age = document.querySelector(`#edit-age-${userId}`).value;
+
+      // 변경된 필드만 updates 객체에 추가
+      if (name) updates.name = name;
+      if (email) updates.email = email;
+      if (age) updates.age = age;
+
+      try {
+        const response = await fetch(`/users/${userId}`, {
+          method: "PATCH",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify(updates),
+        });
+
+        if (!response.ok) {
+          throw new Error(`HTTP error! status: ${response.status}`);
+        }
+
+        const result = await response.json();
+        console.log("업데이트 성공:", result);
+
+        // 수정 폼 숨기기
+        hideEditForm(userId);
+
+        // 사용자 목록 갱신
+        await fetchUsers();
+      } catch (error) {
+        console.error("사용자 정보 업데이트 중 오류 발생:", error);
+        alert("사용자 정보 업데이트 중 오류가 발생했습니다.");
+      }
+    }
+
+    // 삭제 기능 추가 (DELETE)
+    async function deleteUser(userId) {
+      if (!confirm("정말로 이 사용자를 삭제하시겠습니까?")) {
+        return;
+      }
+
+      try {
+        const response = await fetch(`/users/${userId}`, {
+          method: "DELETE",
+        });
+
+        if (!response.ok) {
+          throw new Error(`HTTP error! status: ${response.status}`);
+        }
+
+        const result = await response.json();
+        console.log("삭제 성공:", result);
+
+        // 사용자 목록 갱신
+        await fetchUsers();
+      } catch (error) {
+        console.error("사용자 삭제 중 오류 발생:", error);
+        alert("사용자 삭제 중 오류가 발생했습니다.");
+      }
+    }
+  </script>
+</html>
